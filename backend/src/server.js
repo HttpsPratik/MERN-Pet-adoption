@@ -1,8 +1,19 @@
-const express = require("express");
+const dotenv = require("dotenv");
+dotenv.config();
 
-const app = express();
-app.use(express.json());
+const app = require("./app");
+const connectDB = require("./config/db");
 
-app.get("/health", (req, res) => res.json({ ok: true }));
+const PORT = process.env.PORT || 5000;
 
-app.listen(5000, () => console.log("API running on http://localhost:5000"));
+async function start() {
+  try {
+    await connectDB();
+    app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+  } catch (err) {
+    console.error("Server failed:", err.message);
+    process.exit(1);
+  }
+}
+
+start();
