@@ -17,9 +17,15 @@ const petListingSchema = new mongoose.Schema(
 
     location: { type: String, required: true, trim: true },
 
-    status: { type: String, enum: ["active", "adopted", "resolved"], default: "active" }
+    status: { type: String, enum: ["active", "adopted", "resolved"], default: "active" },
+
+    images: [{ type: String }],
+    
+
   },
   { timestamps: true }
 );
-
+    petListingSchema.index({ title: "text", description: "text", location: "text", breed: "text" });
+    petListingSchema.index({ species: 1, type: 1, status: 1, createdAt: -1 });
+    
 module.exports = mongoose.model("PetListing", petListingSchema);

@@ -16,25 +16,69 @@ exports.createListing = async (req, res) => {
 
 exports.getListings = async (req, res) => {
   try {
-    const { type, species, status, location, page = 1, limit = 10 } = req.query;
+    const {
+      type,
+      species,
+      status,
+      location,
+      gender,
+      minAge,
+      maxAge,
+      q,
+      page = 1,
+      limit = 10,
+      sort = "new", // new | old | ageAsc | ageDesc
+    } = req.query;
 
     const filter = {};
     if (type) filter.type = type;
     if (species) filter.species = species;
     if (status) filter.status = status;
-    if (location) filter.location = new RegExp(location, "i");
+    if (gender) filter.gender = gender;
 
-    const skip = (Number(page) - 1) * Number(limit);
+    // location partial match
+    if (location) filter.location = new RegExp(String(location), "i");
 
-    const items = await PetListing.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .populate("owner", "name email");
+    // age range
+    if (minAge || maxAge) {
+      filter.age = {};
+      if (minAge) filter.age.$gte = Number(minAge);
+      if (maxAge) filter.age.$lte = Number(maxAge);
+    }
 
-    const total = await PetListing.countDocuments(filter);
+    // text search
+    let sortObj = { createdAt: -1 };
+    if (sort === "old") sortObj = { createdAt: 1 };
+    if (sort === "ageAsc") sortObj = { age: 1, createdAt: -1 };
+    if (sort === "ageDesc") sortObj = { age: -1, createdAt: -1 };
 
-    return res.json({ items, total, page: Number(page), limit: Number(limit) });
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(50, Math.max(1, Number(limit)));
+    const skip = (pageNum - 1) * limitNum;
+
+    let query = PetListing.find(filter);
+
+    if (q && String(q).trim().length > 0) {
+      query = PetListing.find(
+        { ...filter, $text: { $search: String(q).trim() } },
+        { score: { $meta: "textScore" } }
+      ).sort({ score: { $meta: "textScore" }, ...sortObj });
+    } else {
+      query = query.sort(sortObj);
+    }
+
+    const [items, total] = await Promise.all([
+      query.skip(skip).limit(limitNum).populate("owner", "name email"),
+      PetListing.countDocuments(q ? { ...filter, $text: { $search: String(q).trim() } } : filter),
+    ]);
+
+    return res.json({
+      items,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    });
   } catch (err) {
     console.error("GET LISTINGS ERROR:", err);
     return res.status(500).json({ message: "Failed to fetch listings" });
@@ -132,3 +176,30 @@ exports.getMyListings = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch my listings" });
   }
 };
+
+exports.addListingImages = async (req, res) => {
+  try {
+    const listing = await PetListing.findById(req.params.id);
+    if (!listing) return res.status(404).json({ message: "Listing not found" });
+
+    // owner check
+    if (String(listing.owner) !== req.user.id) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    const files = req.files || [];
+    if (files.length === 0) {
+      return res.status(400).json({ message: "No images uploaded" });
+    }
+
+    const urls = files.map((f) => `/uploads/${f.filename}`);
+    listing.images = [...(listing.images || []), ...urls];
+
+    await listing.save();
+    return res.json({ message: "Images added", images: listing.images });
+  } catch (err) {
+    console.error("UPLOAD IMAGES ERROR:", err);
+    return res.status(500).json({ message: "Failed to upload images" });
+  }
+};
+

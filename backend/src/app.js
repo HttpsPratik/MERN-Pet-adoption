@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const authRoutes = require("./routes/auth.routes");
 const listingsRoutes = require("./routes/listings.routes");
 
@@ -14,3 +15,6 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingsRoutes);
 module.exports = app;
+
+
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
