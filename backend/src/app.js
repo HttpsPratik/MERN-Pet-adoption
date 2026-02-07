@@ -7,6 +7,7 @@ const compression = require("compression");
 const path = require("path");
 const authRoutes = require("./routes/auth.routes");
 const listingsRoutes = require("./routes/listings.routes");
+const reportsRoutes = require("./routes/reports.routes");
 
 const app = express();
 
@@ -22,6 +23,7 @@ module.exports = app;
 
 
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+app.use("/api", reportsRoutes);
 
 
 
@@ -31,8 +33,6 @@ app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 const errorHandler = require("./middleware/errorHandler");
 
-const authRoutes = require("./routes/auth.routes");
-const listingsRoutes = require("./routes/listings.routes");
 
 
 app.use(helmet());

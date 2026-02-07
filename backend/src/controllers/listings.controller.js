@@ -83,6 +83,8 @@ exports.getListings = async (req, res) => {
     console.error("GET LISTINGS ERROR:", err);
     return res.status(500).json({ message: "Failed to fetch listings" });
   }
+  filter.isHidden = false;
+
 };
 
 

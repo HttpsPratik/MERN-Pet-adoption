@@ -21,6 +21,8 @@ const petListingSchema = new mongoose.Schema(
 
     images: [{ type: String }],
     
+    isHidden: { type: Boolean, default: false },
+
 
   },
   { timestamps: true }
