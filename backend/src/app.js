@@ -27,13 +27,14 @@ app.use("/api", reportsRoutes);
 
 
 
-// Optional hardening
-// const mongoSanitize = require("express-mongo-sanitize");
-// const xss = require("xss-clean");
 
 const errorHandler = require("./middleware/errorHandler");
 
+const inquiryRoutes = require("./routes/inquiry.routes");
+const favoritesRoutes = require("./routes/favorites.routes");
 
+app.use("/api", favoritesRoutes);
+app.use("/api", inquiryRoutes);
 
 app.use(helmet());
 app.use(compression());
