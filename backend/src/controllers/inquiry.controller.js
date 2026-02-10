@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const Inquiry = require("../models/Inquiry");
 const PetListing = require("../models/PetListing");
+const { logAction } = require("../utils/audit");
+
 
 exports.createInquiry = async (req, res) => {
   try {
@@ -63,28 +65,51 @@ exports.getMyInquiriesAsOwner = async (req, res) => {
 exports.updateInquiryStatus = async (req, res) => {
   try {
     const { inquiryId } = req.params;
+
     if (!mongoose.isValidObjectId(inquiryId)) {
       return res.status(400).json({ message: "Invalid inquiry id" });
     }
 
     const inquiry = await Inquiry.findById(inquiryId);
-    if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+    if (!inquiry) {
+      return res.status(404).json({ message: "Inquiry not found" });
+    }
 
     // ✅ owner check
-    if (String(inquiry.owner) !== req.user.id) {
+    if (String(inquiry.owner) !== String(req.user.id)) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
-    inquiry.status = req.body.status;
-    inquiry.ownerNote = req.body.ownerNote ?? inquiry.ownerNote;
+    // (optional) validate allowed statuses
+    const allowed = ["pending", "accepted", "rejected", "closed"];
+    if (req.body.status && !allowed.includes(req.body.status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    if (req.body.status) inquiry.status = req.body.status;
+    if (req.body.ownerNote !== undefined) inquiry.ownerNote = req.body.ownerNote;
 
     await inquiry.save();
+
+    // ✅ log BEFORE returning
+    await logAction({
+      actor: req.user.id,
+      action: "INQUIRY_STATUS_UPDATED",
+      targetType: "Inquiry",
+      targetId: inquiry._id,
+      meta: {
+        status: inquiry.status,
+      },
+    });
+
     return res.json({ message: "Inquiry updated", status: inquiry.status });
   } catch (err) {
     console.error("UPDATE INQUIRY STATUS ERROR:", err);
     return res.status(500).json({ message: "Failed to update inquiry" });
   }
 };
+
+
 
 // ADMIN: view all inquiries (filters + pagination)
 exports.adminGetInquiries = async (req, res) => {

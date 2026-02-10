@@ -70,6 +70,7 @@ exports.getReports = async (req, res) => {
 exports.updateReport = async (req, res) => {
   try {
     const { reportId } = req.params;
+
     if (!mongoose.isValidObjectId(reportId)) {
       return res.status(400).json({ message: "Invalid report id" });
     }
@@ -77,15 +78,24 @@ exports.updateReport = async (req, res) => {
     const report = await Report.findById(reportId);
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    report.status = req.body.status;
-    report.adminNote = req.body.adminNote || report.adminNote;
+    if (req.body.status) report.status = req.body.status;
+    if (req.body.adminNote !== undefined) report.adminNote = req.body.adminNote ?? report.adminNote;
 
     if (req.body.status === "resolved") {
       report.resolvedBy = req.user.id;
       report.resolvedAt = new Date();
     }
 
-    await report.save();
+    await report.save(); // ✅ save first
+
+    await logAction({
+      actor: req.user.id,
+      action: "REPORT_UPDATED",
+      targetType: "Report",
+      targetId: report._id,
+      meta: { status: report.status },
+    });
+
     return res.json({ message: "Report updated" });
   } catch (err) {
     console.error("UPDATE REPORT ERROR:", err);
@@ -93,21 +103,36 @@ exports.updateReport = async (req, res) => {
   }
 };
 
+
 // admin: hide/unhide listing
 exports.setListingHidden = async (req, res) => {
   try {
-    const { id } = req.params; // listing id
+    const { id } = req.params;
+
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid listing id" });
     }
 
     const listing = await PetListing.findById(id);
-    if (!listing) return res.status(404).json({ message: "Listing not found" });
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
 
     listing.isHidden = Boolean(req.body.isHidden);
-    await listing.save();
+    await listing.save(); // ✅ SAVE FIRST
 
-    return res.json({ message: "Listing updated", isHidden: listing.isHidden });
+    // ✅ AUDIT LOG (B)
+    await logAction({
+      actor: req.user.id,
+      action: listing.isHidden ? "LISTING_HIDDEN" : "LISTING_UNHIDDEN",
+      targetType: "Listing",
+      targetId: listing._id,
+    });
+
+    return res.json({
+      message: "Listing updated",
+      isHidden: listing.isHidden,
+    });
   } catch (err) {
     console.error("HIDE LISTING ERROR:", err);
     return res.status(500).json({ message: "Failed to update listing" });

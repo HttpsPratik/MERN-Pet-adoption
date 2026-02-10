@@ -19,7 +19,12 @@ const petListingSchema = new mongoose.Schema(
 
     status: { type: String, enum: ["active", "adopted", "resolved"], default: "active" },
 
-    images: [{ type: String }],
+    images: [{
+    url: { type: String, required: true },
+    publicId: { type: String, required: true },
+  },
+],
+
     
     isHidden: { type: Boolean, default: false },
 

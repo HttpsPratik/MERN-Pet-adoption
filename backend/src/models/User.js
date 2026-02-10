@@ -6,6 +6,11 @@ const userSchema = new mongoose.Schema({
     passwordHash: { type: String, required: true },
     role : { type: String, enum: ['user', 'admin'], default: 'user' },
     favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: "PetListing" }],
+    isEmailVerified: { type: Boolean, default: false },
+    emailOtpHash: { type: String, default: "" },
+    emailOtpExpiresAt: { type: Date },
+    emailOtpAttempts: { type: Number, default: 0 },
+
 
     createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });

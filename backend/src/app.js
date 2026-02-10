@@ -8,12 +8,14 @@ const path = require("path");
 const authRoutes = require("./routes/auth.routes");
 const listingsRoutes = require("./routes/listings.routes");
 const reportsRoutes = require("./routes/reports.routes");
+const auditRoutes = require("./routes/audit.routes");
+
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-
+app.use("/api", auditRoutes);
 app.get("/", (req, res) => res.json({ message: "Pet Adoption API is running" }));
 app.get("/health", (req, res) => res.json({ ok: true }));
 

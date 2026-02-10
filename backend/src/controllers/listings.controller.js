@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
 const PetListing = require("../models/PetListing");
+const cloudinary = require("../config/cloudinary");
+const { uploadBuffer } = require("../utils/cloudinaryUpload");
+
 
 exports.createListing = async (req, res) => {
   try {
@@ -149,6 +152,7 @@ exports.updateListing = async (req, res) => {
 exports.deleteListing = async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid listing id" });
     }
@@ -156,10 +160,18 @@ exports.deleteListing = async (req, res) => {
     const listing = await PetListing.findById(id);
     if (!listing) return res.status(404).json({ message: "Listing not found" });
 
-    
     if (String(listing.owner) !== req.user.id) {
       return res.status(403).json({ message: "Not allowed" });
     }
+
+    const images = listing.images || [];
+
+    // ✅ safer cleanup
+    await Promise.allSettled(
+      images
+        .filter((img) => img && img.publicId)
+        .map((img) => cloudinary.uploader.destroy(img.publicId))
+    );
 
     await listing.deleteOne();
     return res.json({ message: "Deleted" });
@@ -168,6 +180,7 @@ exports.deleteListing = async (req, res) => {
     return res.status(500).json({ message: "Failed to delete listing" });
   }
 };
+
 
 exports.getMyListings = async (req, res) => {
   try {
@@ -190,18 +203,58 @@ exports.addListingImages = async (req, res) => {
     }
 
     const files = req.files || [];
-    if (files.length === 0) {
-      return res.status(400).json({ message: "No images uploaded" });
-    }
+    if (files.length === 0) return res.status(400).json({ message: "No images uploaded" });
 
-    const urls = files.map((f) => `/uploads/${f.filename}`);
-    listing.images = [...(listing.images || []), ...urls];
+    const folder = `${process.env.CLOUDINARY_FOLDER || "adoptme"}/listings/${listing._id}`;
 
+    const uploads = await Promise.all(
+      files.map((f) =>
+        uploadBuffer(f.buffer, {
+          folder,
+          resource_type: "image",
+        })
+      )
+    );
+
+    const newImages = uploads.map((u) => ({
+      url: u.secure_url,
+      publicId: u.public_id,
+    }));
+
+    listing.images = [...(listing.images || []), ...newImages];
     await listing.save();
+
     return res.json({ message: "Images added", images: listing.images });
   } catch (err) {
-    console.error("UPLOAD IMAGES ERROR:", err);
+    console.error("CLOUDINARY UPLOAD ERROR:", err);
     return res.status(500).json({ message: "Failed to upload images" });
   }
 };
 
+exports.removeListingImage = async (req, res) => {
+  try {
+    const { id, publicId } = req.params;
+
+    const listing = await PetListing.findById(id);
+    if (!listing) return res.status(404).json({ message: "Listing not found" });
+
+    // owner check
+    if (String(listing.owner) !== req.user.id) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    const decodedPublicId = decodeURIComponent(publicId);
+
+    // delete from cloudinary
+    await cloudinary.uploader.destroy(decodedPublicId);
+
+    // remove from db
+    listing.images = (listing.images || []).filter((img) => img.publicId !== decodedPublicId);
+    await listing.save();
+
+    return res.json({ message: "Image removed", images: listing.images });
+  } catch (err) {
+    console.error("REMOVE IMAGE ERROR:", err);
+    return res.status(500).json({ message: "Failed to remove image" });
+  }
+};
